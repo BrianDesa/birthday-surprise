@@ -256,6 +256,367 @@ let last=0;addEventListener('pointermove',e=>{const t=performance.now();if(t-las
 document.querySelectorAll('.photo').forEach(photo=>{photo.addEventListener('click',()=>{document.querySelectorAll('.photo').forEach(p=>p.style.zIndex='');photo.style.zIndex='30';});});
 /* Cake */
 $('cake').onclick=()=>{const c=$('cake');if(c.classList.contains('out'))return;c.classList.add('out');$('cakeHint').textContent='';$('wish').classList.add('show');for(let i=0;i<6;i++)setTimeout(()=>burst(Math.random()*innerWidth,innerHeight*(.3+Math.random()*.4),22),i*250)};
+
+/* ===== HOLOGRAPHIC WHALES + STARS + FLOATING HEARTS ===== */
+
+const WH = [
+  { s: 1,   a: .55, cy: .42, ry: .15, rf: 1,    th: 0,   w: .075, p: 0, om: 2 },
+  { s: .62, a: .42, cy: .64, ry: .09, rf: .92,  th: 2.2, w: -.06, p: 2, om: 1.8 },
+  { s: .4,  a: .32, cy: .80, ry: .06, rf: .97,  th: 4.1, w: .05,  p: 4, om: 1.7 }
+];
+
+const WT = [0, .01, .04, .1, .2, .32, .45, .6, .76, .9, .97, 1];
+const WTP = [0, .022, .04, .055, .07, .082, .08, .064, .042, .026, .016, .013];
+const WBT = [0, .02, .05, .075, .095, .105, .1, .08, .052, .03, .017, .013];
+
+const SP = Array.from({ length: 16 }, () => ({
+  t: .08 + Math.random() * .6,
+  k: Math.random() * 1.6 - .8,
+  o: Math.random() * 6
+}));
+
+function cr(a, b, c, d, u) {
+  return .5 * (
+    2 * b +
+    (-a + c) * u +
+    (2 * a - 5 * b + 4 * c - d) * u * u +
+    (-a + 3 * b - 3 * c + d) * u * u * u
+  );
+}
+
+function prof(t) {
+  let i = 0;
+  while (i < WT.length - 2 && t > WT[i + 1]) i++;
+
+  const u = (t - WT[i]) / (WT[i + 1] - WT[i]);
+  const g = (A, k) => A[Math.max(0, Math.min(A.length - 1, k))];
+
+  return [
+    Math.max(0, cr(g(WTP, i - 1), g(WTP, i), g(WTP, i + 1), g(WTP, i + 2), u)),
+    Math.max(0, cr(g(WBT, i - 1), g(WBT, i), g(WBT, i + 1), g(WBT, i + 2), u))
+  ];
+}
+
+let lt = 0;
+
+function flipper(x, y, ang, len, wd, A) {
+  cx.save();
+  cx.translate(x, y);
+  cx.rotate(ang);
+
+  cx.beginPath();
+  cx.moveTo(0, -wd * .4);
+  cx.bezierCurveTo(len * .35, -wd * .75, len * .8, -wd * .55, len, 0);
+  cx.bezierCurveTo(len * .8, wd * .5, len * .35, wd * .85, 0, wd * .4);
+  cx.closePath();
+
+  cx.globalCompositeOperation = "source-over";
+  cx.fillStyle = `hsla(318,55%,26%,${A * 1.1})`;
+  cx.fill();
+
+  cx.globalCompositeOperation = "lighter";
+  cx.strokeStyle = `hsla(330,65%,58%,${A})`;
+  cx.stroke();
+
+  cx.lineWidth = .7;
+  cx.strokeStyle = `hsla(335,70%,62%,${A * .45})`;
+
+  for (const k of [-.25, 0, .25]) {
+    cx.beginPath();
+    cx.moveTo(len * .08, wd * k);
+    cx.quadraticCurveTo(len * .5, wd * k * 1.5, len * .92, wd * k * .2);
+    cx.stroke();
+  }
+
+  cx.restore();
+  cx.lineWidth = 1.3;
+}
+
+function whale(w, ts, dt) {
+  const L = Math.min(W * .6, 540) * w.s;
+  const N = 64;
+  const T = ts / 1000;
+  const ph = T * w.om + w.p;
+
+  w.th += w.w * dt / 1000;
+
+  const sn = Math.sin(w.th);
+  const cs = Math.cos(w.th);
+  const Rx = Math.max(30, (W - L * 1.1) / 2) * w.rf;
+  const Ry = H * w.ry;
+
+  const px = W / 2 + Rx * cs;
+  const py = H * w.cy + Ry * sn + Math.sin(ph - 1) * L * .012;
+
+  const sx = Math.max(-1, Math.min(1, -sn * Math.sign(w.w) * 2.4));
+  const vx = -Rx * sn * w.w;
+  const vy = Ry * cs * w.w;
+
+  const pitch = Math.max(
+    -.35,
+    Math.min(.35, Math.atan2(vy * Math.sign(sx || 1), Math.abs(vx) + .001))
+  );
+
+  const dep = 1 + .2 * sn;
+  const A = w.a * (.75 + .25 * sn) * (.9 + .1 * Math.sin(ts / 130 + w.p));
+
+  const sp = [];
+
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    sp.push({
+      t,
+      x: (.5 - t) * L,
+      y: L * .07 * Math.pow(t, 2.2) * Math.sin(ph - t * 2.6)
+    });
+  }
+
+  sp.forEach((p, i) => {
+    const a = sp[Math.max(0, i - 1)];
+    const b = sp[Math.min(N, i + 1)];
+
+    const tx = b.x - a.x;
+    const ty = b.y - a.y;
+    const m = Math.hypot(tx, ty);
+    const ux = -ty / m;
+    const uy = tx / m;
+    const pr = prof(p.t);
+
+    p.ux = ux;
+    p.uy = uy;
+    p.ht = pr[0] * L;
+    p.hb = pr[1] * L;
+    p.T = { x: p.x + ux * p.ht, y: p.y + uy * p.ht };
+    p.B = { x: p.x - ux * p.hb, y: p.y - uy * p.hb };
+  });
+
+  cx.save();
+  cx.translate(px, py);
+  cx.rotate(pitch + Math.sin(ph - 1.2) * .03);
+  cx.scale(sx * dep, dep);
+
+  cx.shadowColor = "rgba(200,70,140,.55)";
+  cx.shadowBlur = 8;
+  cx.lineWidth = 1.3;
+  cx.lineJoin = "round";
+
+  const b19 = sp[19];
+  const b17 = sp[17];
+
+  flipper(
+    b17.B.x + L * .02,
+    b17.B.y - b17.hb * .2,
+    1.72 + .2 * Math.sin(T * .9 + w.p + 1.2),
+    L * .19,
+    L * .036,
+    A * .55
+  );
+
+  cx.beginPath();
+
+  for (let i = 0; i <= N; i++) {
+    i ? cx.lineTo(sp[i].T.x, sp[i].T.y) : cx.moveTo(sp[i].T.x, sp[i].T.y);
+  }
+
+  for (let i = N; i >= 0; i--) {
+    cx.lineTo(sp[i].B.x, sp[i].B.y);
+  }
+
+  cx.closePath();
+
+  const g = cx.createLinearGradient(0, -L * .1, 0, L * .11);
+  g.addColorStop(0, `hsla(300,50%,16%,${A * 1.2})`);
+  g.addColorStop(1, `hsla(325,60%,32%,${A * 1.2})`);
+
+  cx.globalCompositeOperation = "source-over";
+  cx.fillStyle = g;
+  cx.fill();
+
+  cx.globalCompositeOperation = "lighter";
+  cx.strokeStyle = `hsla(330,65%,56%,${A})`;
+  cx.stroke();
+
+  cx.lineWidth = .8;
+
+  for (let i = 5; i < N - 5; i += 2) {
+    const p = sp[i];
+    const sc = .5 + .5 * Math.sin(T * 1.6 - i * .3);
+
+    cx.strokeStyle = `hsla(${305 + p.t * 30},65%,58%,${A * (.08 + .3 * sc)})`;
+    cx.beginPath();
+    cx.moveTo(p.T.x, p.T.y);
+    cx.lineTo(p.B.x, p.B.y);
+    cx.stroke();
+  }
+
+  cx.strokeStyle = `hsla(335,70%,62%,${A * .5})`;
+
+  for (const k of [.3, .5, .7, .88]) {
+    cx.beginPath();
+
+    for (let i = 3; i <= 30; i++) {
+      const p = sp[i];
+      const x = p.x - p.ux * p.hb * k;
+      const y = p.y - p.uy * p.hb * k;
+
+      i > 3 ? cx.lineTo(x, y) : cx.moveTo(x, y);
+    }
+
+    cx.stroke();
+  }
+
+  cx.strokeStyle = `hsla(330,70%,66%,${A * .8})`;
+  cx.lineWidth = 1;
+  cx.beginPath();
+
+  for (let i = 1; i <= 10; i++) {
+    const p = sp[i];
+    const o = -p.hb * .3 * Math.min(1, i / 3);
+
+    i > 1
+      ? cx.lineTo(p.x + p.ux * o, p.y + p.uy * o)
+      : cx.moveTo(p.x + p.ux * o, p.y + p.uy * o);
+  }
+
+  cx.stroke();
+
+  const d0 = sp[43];
+  const d1 = sp[46];
+  const d2 = sp[49];
+
+  const pk = {
+    x: d1.T.x + d1.ux * L * .032 - L * .012,
+    y: d1.T.y + d1.uy * L * .032
+  };
+
+  cx.beginPath();
+  cx.moveTo(d0.T.x, d0.T.y);
+  cx.quadraticCurveTo(
+    sp[44].T.x + sp[44].ux * L * .02,
+    sp[44].T.y + sp[44].uy * L * .02,
+    pk.x, pk.y
+  );
+  cx.quadraticCurveTo(
+    sp[48].T.x + sp[48].ux * L * .008,
+    sp[48].T.y + sp[48].uy * L * .008,
+    d2.T.x, d2.T.y
+  );
+
+  cx.globalCompositeOperation = "source-over";
+  cx.fillStyle = `hsla(310,55%,22%,${A * 1.1})`;
+  cx.fill();
+
+  cx.globalCompositeOperation = "lighter";
+  cx.strokeStyle = `hsla(330,65%,56%,${A})`;
+  cx.stroke();
+
+  for (const q of SP) {
+    const i = Math.round(q.t * N);
+    const p = sp[i];
+    const o = q.k > 0 ? q.k * p.ht : q.k * p.hb;
+    const tw = .5 + .5 * Math.sin(T * 2 + q.o);
+
+    cx.fillStyle = `hsla(${q.o > 3 ? 42 : 335},80%,72%,${A * (.25 + .6 * tw)})`;
+    cx.beginPath();
+    cx.arc(p.x + p.ux * o, p.y + p.uy * o, 1.3, 0, 7);
+    cx.fill();
+  }
+
+  const ey = sp[8];
+
+  cx.fillStyle = `hsla(42,90%,78%,${Math.min(1, A + .25)})`;
+  cx.beginPath();
+  cx.arc(
+    ey.x + ey.ux * ey.ht * .2,
+    ey.y + ey.uy * ey.ht * .2,
+    Math.max(1.6, L * .004),
+    0, 7
+  );
+  cx.fill();
+
+  flipper(
+    b19.B.x,
+    b19.B.y - b19.hb * .15,
+    1.95 + .25 * Math.sin(T * .9 + w.p),
+    L * .22,
+    L * .042,
+    A
+  );
+
+  // Tail fluke
+  const e = sp[N];
+  const e2 = sp[N - 3];
+  const ta = Math.atan2(e.y - e2.y, e.x - e2.x);
+  const tp = ph - 3.5;
+  const s = L * .12 * (.5 + .5 * Math.abs(Math.cos(tp)));
+
+  cx.save();
+  cx.translate(e.x, e.y);
+  cx.rotate(ta + .45 * Math.sin(tp));
+
+  cx.beginPath();
+  cx.moveTo(0, 0);
+  cx.bezierCurveTo(L * .012, -s * .35, L * .04, -s * .9, L * .09, -s);
+  cx.quadraticCurveTo(L * .07, -s * .4, L * .034, -s * .06);
+  cx.lineTo(L * .034, s * .06);
+  cx.quadraticCurveTo(L * .07, s * .4, L * .09, s * .85);
+  cx.bezierCurveTo(L * .04, s * .8, L * .012, s * .35, 0, 0);
+  cx.closePath();
+
+  cx.globalCompositeOperation = "source-over";
+  cx.fillStyle = `hsla(315,55%,26%,${A * 1.1})`;
+  cx.fill();
+
+  cx.globalCompositeOperation = "lighter";
+  cx.strokeStyle = `hsla(330,65%,60%,${A})`;
+  cx.stroke();
+
+  cx.restore();
+  cx.restore();
+}
+
+function whales(ts) {
+  const dt = lt ? Math.min(ts - lt, 80) : 0;
+  lt = ts;
+  WH.forEach(w => whale(w, ts, dt));
+}
+
+/* ===== MAIN CANVAS ANIMATION ===== */
+
+function draw(ts) {
+  cx.clearRect(0, 0, W, H);
+
+  // Stars and floating hearts
+  for (const p of P) {
+    const a = .5 + .5 * Math.sin(ts / 900 + p.t);
+
+    if (p.k === 0) {
+      cx.fillStyle = `rgba(255,240,210,${.2 + a * .7})`;
+      cx.beginPath();
+      cx.arc(p.x * W, p.y * H, p.r, 0, Math.PI * 2);
+      cx.fill();
+    } else {
+      if (!rm) p.y -= p.v;
+      if (p.y < -.05) p.y = 1.05;
+
+      cx.fillStyle = `rgba(242,167,184,${.08 + a * .14})`;
+      heartPath(
+        p.x * W + Math.sin(ts / 2000 + p.t) * 14,
+        p.y * H,
+        p.r
+      );
+    }
+  }
+
+  // Holographic whales
+  whales(ts);
+
+  // Continue animation
+  if (!rm) requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+
 </script>
 </body>
 </html>
