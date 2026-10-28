@@ -34,6 +34,7 @@ h2{font-size:clamp(1.8rem,5vw,2.6rem);letter-spacing:.04em;margin-bottom:2rem}
 .cd div{min-width:4.6rem;padding:.7rem .4rem;border:1px solid rgba(246,212,143,.35);border-radius:14px;background:rgba(255,255,255,.04);backdrop-filter:blur(6px)}
 .cd b{display:block;font:400 2rem/1 var(--display);color:var(--gold)}.cd span{font-size:.95rem;opacity:.8}
 .hint{opacity:.7;font-style:italic;margin-top:2.5rem;animation:float 3s ease-in-out infinite}
+.birthday-note{max-width:32rem;margin:1.5rem auto;color:var(--gold);font-size:1.35rem;font-style:italic}
 /* Letter */
 .paper{position:relative;isolation:isolate;overflow:visible;max-width:38rem;width:100%;padding:clamp(1.5rem,5vw,3rem);padding-bottom:5rem;background:linear-gradient(180deg,rgba(255,227,232,.09),rgba(255,227,232,.04));border:1px solid rgba(242,167,184,.3);border-radius:6px 28px 6px 28px;text-align:left;min-height:22rem}
 #typed{white-space:pre-wrap;font-size:1.3rem}.caret{display:inline-block;width:2px;height:1.2em;background:var(--gold);vertical-align:text-bottom;animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
@@ -112,7 +113,7 @@ footer{position:relative;z-index:1;text-align:center;padding:2rem 1rem 4rem;opac
 <main>
 <section id="hero">
   <p class="script">Happy Birthday,</p><h1 id="name">Dulniiii</h1><p>Your day begins in</p>
-  <div class="cd" id="cd" role="timer" aria-live="off"><div><b id="h">00</b><span>hours</span></div><div><b id="m">00</b><span>minutes</span></div><div><b id="s">00</b><span>seconds</span></div></div>
+    <p class="birthday-note">Your birthday may have passed, but celebrating you never ends. ♥</p>
   <p class="hint">Keep scrolling, there’s more ↓</p>
 </section>
 <section id="letter">
@@ -243,8 +244,6 @@ function heartPath(x,y,s){cx.beginPath();cx.moveTo(x,y+s*.3);cx.bezierCurveTo(x-
 function draw(ts){cx.clearRect(0,0,W,H);for(const p of P){const a=.5+.5*Math.sin(ts/900+p.t);if(p.k===0){cx.fillStyle=`rgba(255,240,210,${.2+a*.7})`;cx.beginPath();cx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);cx.fill()}else{if(!rm)p.y-=p.v;if(p.y<-.05)p.y=1.05;cx.fillStyle=`rgba(242,167,184,${.08+a*.14})`;heartPath(p.x*W+Math.sin(ts/2000+p.t)*14,p.y*H,p.r)}}if(!rm)requestAnimationFrame(draw)}requestAnimationFrame(draw);
 /* Envelope gate */
 function openGate(){$('env').classList.add('open');setTimeout(()=>{$('gate').classList.add('gone');burst(innerWidth/2,innerHeight/2,26)},900)}$('open').onclick=$('env').onclick=openGate;
-/* Countdown to the next local midnight */
-function tick(){const n=new Date(),m=new Date(n);m.setHours(24,0,0,0);let d=Math.max(0,m-n);const f=v=>String(v).padStart(2,'0');$('h').textContent=f(Math.floor(d/36e5));$('m').textContent=f(Math.floor(d%36e5/6e4));$('s').textContent=f(Math.floor(d%6e4/1e3))}tick();setInterval(tick,1000);
 /* Type the letter when it scrolls into view */
 let typed=false;new IntersectionObserver((e,o)=>{if(e[0].isIntersecting&&!typed){typed=true;o.disconnect();let i=0;const txt=CFG.letter+CFG.from;const go=()=>{$('typed').textContent=txt.slice(0,++i);if(i<txt.length)setTimeout(go,rm?1:32)};go()}},{threshold:.35}).observe($('letter'));
 /* Reasons flip cards */
