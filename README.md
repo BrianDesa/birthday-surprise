@@ -99,11 +99,9 @@ This creates a futuristic, dreamlike effect that makes the website feel more dis
 📱 10. Responsive Design
 
 The layout is designed to adapt to different screen sizes.
-
 Desktop and laptop screens.
 Tablets.
 Mobile phones.
-
 Since the recipient may open the link on their phone, always preview the website on a mobile device before sharing it.
 
 
