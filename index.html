@@ -257,1029 +257,117 @@ document.querySelectorAll('.photo').forEach(photo=>{photo.addEventListener('clic
 /* Cake */
 $('cake').onclick=()=>{const c=$('cake');if(c.classList.contains('out'))return;c.classList.add('out');$('cakeHint').textContent='';$('wish').classList.add('show');for(let i=0;i<6;i++)setTimeout(()=>burst(Math.random()*innerWidth,innerHeight*(.3+Math.random()*.4),22),i*250)};
 
-/* ===== HOLOGRAPHIC WHALES + STARS + FLOATING HEARTS ===== */
-
-const WH = [
-  { s: 1, a: .55, cy: .42, ry: .15, rf: 1, th: 0, w: .075, p: 0, om: 2 },
-  { s: .62, a: .42, cy: .64, ry: .09, rf: .92, th: 2.2, w: -.06, p: 2, om: 1.8 },
-  { s: .4, a: .32, cy: .80, ry: .06, rf: .97, th: 4.1, w: .05, p: 4, om: 1.7 }
-];
-
-/* Body profile: top/bottom half-depth */
-const WT = [0, .01, .04, .1, .2, .3, .42, .55, .68, .8, .9, .97, 1],
-      WTP = [0, .02, .05, .075, .095, .108, .112, .1, .078, .052, .032, .02, .018],
-      WBT = [0, .02, .06, .095, .125, .138, .145, .125, .09, .056, .034, .02, .018];
-
-const SP = Array.from({ length: 16 }, () => ({
-  t: .08 + Math.random() * .6,
-  k: Math.random() * 1.6 - .8,
-  o: Math.random() * 6
-}));
-
-/* Faint circuit traces on the flanks */
-const TRC = [];
-
-for (let s = 0; s < 2; s++) {
-  for (let k = 0; k < 7; k++) {
-    let t = .2 + Math.random() * .5;
-    let a = -.2 + Math.random() * .6;
-    const pts = [[t, a]];
-
-    for (let m = 0; m < 5; m++) {
-      if (m % 2 === 0) {
-        t = Math.max(.12, Math.min(.8, t + (Math.random() - .4) * .08));
-      } else {
-        a = Math.max(-.4, Math.min(.6, a + (Math.random() - .5) * .35));
-      }
-      pts.push([t, a]);
-    }
-
-    TRC.push({
-      side: s ? 1 : -1,
-      pts,
-      c: Math.random() > .7 ? 215 : 340
-    });
-  }
-}
-
-const sm = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
-
-const nz = v => {
-  const m = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / m, v[1] / m, v[2] / m];
-};
-
-const cross = (a, b) => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0]
-];
-
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
-const lin = (...t) => {
-  const r = [0, 0, 0];
-
-  for (let i = 0; i < t.length; i += 2) {
-    for (let k = 0; k < 3; k++) {
-      r[k] += t[i][k] * t[i + 1];
-    }
-  }
-
-  return r;
-};
-
-function cr(a, b, c, d, u) {
-  return .5 * (
-    2 * b +
-    (-a + c) * u +
-    (2 * a - 5 * b + 4 * c - d) * u * u +
-    (-a + 3 * b - 3 * c + d) * u * u * u
-  );
-}
-
-function prof(t) {
-  let i = 0;
-
-  while (i < WT.length - 2 && t > WT[i + 1]) i++;
-
-  const u = (t - WT[i]) / (WT[i + 1] - WT[i]);
-  const g = (A, k) => A[Math.max(0, Math.min(A.length - 1, k))];
-
-  let ht = Math.max(0, cr(
-    g(WTP, i - 1), g(WTP, i),
-    g(WTP, i + 1), g(WTP, i + 2), u
-  ));
-
-  let hb = Math.max(0, cr(
-    g(WBT, i - 1), g(WBT, i),
-    g(WBT, i + 1), g(WBT, i + 2), u
-  ));
-
-  if (t < .05) {
-    const k = Math.sqrt(Math.max(0, 1 - Math.pow(1 - t / .05, 2)));
-    ht *= k;
-    hb *= k;
-  }
-
-  return [ht, hb];
-}
-
-let lt = 0;
-
-const oc = document.createElement("canvas");
-const ox = oc.getContext("2d");
-
-function poly(c, pts, close) {
-  c.beginPath();
-
-  pts.forEach((p, i) => {
-    if (i) c.lineTo(p[0], p[1]);
-    else c.moveTo(p[0], p[1]);
-  });
-
-  if (close) c.closePath();
-}
-
-/*
-  FIXED: the # in the supplied hsla() strings is an alpha placeholder.
-  Replace it with the requested alpha value to create valid CSS colors.
-*/
-function jointGrad(p0, p1, A, fadeEnd, c1, c2) {
-  const g = cx.createLinearGradient(
-    p0[0], p0[1],
-    p1[0], p1[1]
-  );
-
-  const alpha = Math.max(0, Math.min(1, A));
-
-  g.addColorStop(0, c1.replace("#", alpha));
-  g.addColorStop(fadeEnd, c1.replace("#", alpha));
-  g.addColorStop(1, c2.replace("#", alpha));
-
-  return g;
-}
-
-/* Paint off-screen, then composite with transparency */
-function layer(pts, alpha, fn) {
-  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-
-  for (const p of pts) {
-    if (p[0] < x0) x0 = p[0];
-    if (p[0] > x1) x1 = p[0];
-    if (p[1] < y0) y0 = p[1];
-    if (p[1] > y1) y1 = p[1];
-  }
-
-  x0 = Math.max(0, Math.floor(x0 - 3));
-  y0 = Math.max(0, Math.floor(y0 - 3));
-  x1 = Math.min(W, Math.ceil(x1 + 3));
-  y1 = Math.min(H, Math.ceil(y1 + 3));
-
-  if (x1 <= x0 || y1 <= y0) return;
-
-  if (oc.width !== W || oc.height !== H) {
-    oc.width = W;
-    oc.height = H;
-  }
-
-  ox.clearRect(x0, y0, x1 - x0, y1 - y0);
-
-  fn(ox);
-
-  cx.globalCompositeOperation = "source-over";
-  cx.globalAlpha = Math.min(1, alpha);
-
-  cx.drawImage(
-    oc,
-    x0, y0, x1 - x0, y1 - y0,
-    x0, y0, x1 - x0, y1 - y0
-  );
-
-  cx.globalAlpha = 1;
-}
-
-function whale(w, ts, dt) {
-  const T = ts / 1000;
-  const L = Math.min(W * .6, 540) * w.s;
-  const ph = T * w.om + w.p;
-  const N = Math.round(26 + 12 * w.s);
-  const M = w.s > .5 ? 20 : 14;
-
-  /* Path, heading, and turning */
-  w.th += w.w * dt / 1000;
-
-  const sn = Math.sin(w.th);
-  const cs = Math.cos(w.th);
-
-  const Rx = Math.max(30, (W - L * 1.1) / 2) * w.rf;
-  const Ry = H * w.ry;
-  const Rz = Rx * .55;
-
-  const px = W / 2 + Rx * cs;
-  const py = H * w.cy + Ry * sn + Math.sin(ph - 1) * L * .012;
-
-  const vx = -Rx * sn * w.w;
-  const vz = Rz * cs * w.w;
-  const vy = Ry * cs * w.w;
-  const psi = Math.atan2(vz, vx);
-
-  let tr = w.tr || 0;
-
-  if (dt > 0 && w.pp !== undefined) {
-    const d = Math.atan2(
-      Math.sin(psi - w.pp),
-      Math.cos(psi - w.pp)
-    );
-
-    tr += (d / (dt / 1000) - tr) * Math.min(1, dt / 400);
-  }
-
-  w.pp = psi;
-  w.tr = tr;
-
-  const steer = Math.max(-1, Math.min(1, tr * 7));
-
-  const roll =
-    Math.max(-.4, Math.min(.4, tr * 2.2)) +
-    Math.sin(T * .35 + w.p) * .12;
-
-  const phi =
-    Math.max(
-      -.1,
-      Math.min(
-        .1,
-        -Math.atan2(vy, Math.hypot(vx, vz) + .001) * .5
-      )
-    ) + Math.sin(ph - 1.2) * .03;
-
-  const el = Math.max(-.5, Math.min(.5, (py / H - .55) * 1.4));
-  const ce = Math.cos(el);
-  const se = Math.sin(el);
-
-  const D = 3 * L;
-  const dep = 1 + .2 * sn;
-  const A = w.a * (.75 + .25 * sn) * (.9 + .1 * Math.sin(ts / 130 + w.p));
-
-  const crl = Math.cos(roll);
-  const srl = Math.sin(roll);
-  const cph = Math.cos(phi);
-  const sph = Math.sin(phi);
-  const cps = Math.cos(psi);
-  const sps = Math.sin(psi);
-
-  const rot = (X, Y, Z) => {
-    const y0 = Y * crl - Z * srl;
-    const z0 = Y * srl + Z * crl;
-
-    const x1 = X * cph - y0 * sph;
-    const y1 = X * sph + y0 * cph;
-
-    return [
-      x1 * cps - z0 * sps,
-      y1,
-      x1 * sps + z0 * cps
-    ];
-  };
-
-  const rotv = v => rot(v[0], v[1], v[2]);
-
-  const prj = r => {
-    const f = D / (D - r[2]) * dep;
-
-    return [
-      px + r[0] * f,
-      py - r[1] * ce * f + r[2] * se * f
-    ];
-  };
-
-  const facing = n => n[1] * se + n[2] * ce > 0;
-  const idx = t => Math.min(N, Math.round(Math.pow(t, 1 / 1.35) * N));
-
-  /* Skin shading */
-  const skin = (am, tm, lit, cv) => {
-    const bl = Math.max(0, am) * (.35 + .65 * tm);
-    const sh = .5 + .5 * Math.sin(T * 1.1 - tm * 9 + am * 1.5);
-    const g = Math.pow(sh, 6) * .38;
-    const rim = Math.pow(1 - cv, 3);
-
-    let h = (300 + (am < 0 ? -am * 28 : 0)) * (1 - bl) + 232 * bl;
-
-    h += ((h > 180 ? 380 : 20) - h) * g;
-
-    const l =
-      13 + 20 * lit + 10 * cv + 3 * bl +
-      9 * Math.max(0, -am) * (tm < .7 ? 1 : .5) -
-      3 * Math.max(0, am) + 9 * g + 16 * rim;
-
-    const s = 58 + 14 * bl - 22 * g + 10 * rim;
-
-    return `hsl(${h | 0},${s | 0}%,${Math.min(80, l) | 0}%)`;
-  };
-
-  /* Spine: swimming wave, tail movement, and turning */
-  const bendZ = Math.max(-.08 * L, Math.min(.08 * L, tr * L * .45));
-  const S = [];
-
-  for (let i = 0; i <= N; i++) {
-    const t = Math.pow(i / N, 1.35);
-
-    S.push({
-      t,
-      c: [
-        (.5 - t) * L,
-        L * .08 * t * t + L * .07 * Math.pow(t, 2.2) * Math.sin(ph - t * 2.6),
-        L * .018 * Math.pow(t, 1.6) * Math.sin(ph - t * 2.6 + 1.3) - bendZ * t * t
-      ]
-    });
-  }
-
-  S.forEach((p, i) => {
-    const a = S[Math.max(0, i - 1)].c;
-    const b = S[Math.min(N, i + 1)].c;
-
-    const f = nz([
-      b[0] - a[0],
-      b[1] - a[1],
-      b[2] - a[2]
-    ]);
-
-    const u = nz([f[1], -f[0], 0]);
-    const pr = prof(p.t);
-
-    p.f = f;
-    p.u = u;
-    p.sd = cross(u, f);
-    p.ht = pr[0] * L;
-    p.hb = pr[1] * L;
-
-    p.lw =
-      (p.ht + p.hb) * .5 *
-      (1 + .25 * Math.exp(-Math.pow(p.t / .2, 2))) *
-      (p.t > .86 ? 1 + 1.7 * Math.pow(sm((p.t - .86) / .14), 2) : 1);
-  });
-
-  const lc = (p, a, b) =>
-    lin(p.c, 1, p.u, a * (a > 0 ? p.ht : p.hb), p.sd, b * p.lw);
-
-  const surf = (i, a, b) => rotv(lc(S[i], a, b));
-  const nrm = (i, a, b) => rotv(lin(S[i].u, a, S[i].sd, b));
-
-  /* Body mesh */
-  const R3 = [], V = [], F = [], allP = [];
-
-  for (let i = 0; i <= N; i++) {
-    R3.push([]);
-    V.push([]);
-
-    for (let j = 0; j < M; j++) {
-      const th = j / M * 6.2832;
-      const r = surf(i, Math.cos(th), Math.sin(th));
-      const q = prj(r);
-
-      R3[i].push(r);
-      V[i].push(q);
-      allP.push(q);
-    }
-  }
-
-  const rp = [], fills = [];
-  const sil = [new Path2D(), new Path2D()];
-
-  const seg = (P, a, b) => {
-    P.moveTo(a[0], a[1]);
-    P.lineTo(b[0], b[1]);
-  };
-
-  const sub = (a, b) => [
-    a[0] - b[0],
-    a[1] - b[1],
-    a[2] - b[2]
+/* ===== HOLOGRAPHIC BUTTERFLIES =====
+   Paste this in place of the whole "HOLOGRAPHIC WHALES + STARS + FLOATING HEARTS" block
+   (delete from that comment to the very end of your <script>). Nothing else needs to change.
+   It draws on its own transparent canvas, so your stars, hearts and page content stay exactly as they are. */
+(function(){
+  const bc=document.createElement('canvas');bc.setAttribute('aria-hidden','true');
+  bc.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:20';
+  document.body.appendChild(bc);
+  const g=bc.getContext('2d');let BW=0,BH=0;
+  function fit(){const d=Math.min(2,window.devicePixelRatio||1);BW=innerWidth;BH=innerHeight;bc.width=BW*d;bc.height=BH*d;g.setTransform(d,0,0,d,0,0)}
+  fit();addEventListener('resize',fit);
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* wing outlines in wing space: a = span outward from body, c = chord (+ forward) */
+  const FORE=[[0,.12],[.3,.4],[.7,.62],[1,.56],[1.08,.34],[1,.08],[.86,-.14],[.58,-.24],[.28,-.18],[0,-.12]];
+  const HIND=[[0,-.04],[.5,-.1],[.86,-.28],[.97,-.54],[.82,-.8],[.64,-.86],[.56,-1.16],[.42,-.9],[.2,-.64],[0,-.42]];
+  function smooth(p,n){const o=[],L=p.length;for(let i=0;i<L;i++){const a=p[(i+L-1)%L],b=p[i],c=p[(i+1)%L],d=p[(i+2)%L];
+    for(let k=0;k<n;k++){const u=k/n,u2=u*u,u3=u2*u;o.push([0,1].map(j=>.5*(2*b[j]+(-a[j]+c[j])*u+(2*a[j]-5*b[j]+4*c[j]-d[j])*u2+(-a[j]+3*b[j]-3*c[j]+d[j])*u3)))}}return o}
+  const FW=smooth(FORE,4),HW=smooth(HIND,4),FV=[10,14,18,22,26,30,34],HV=[8,12,16,20,24,28,32];
+  const tipOf=o=>o.reduce((m,p,i)=>p[0]>o[m][0]?i:m,0),FT=tipOf(FW),HT=tipOf(HW);
+  const mh=(a,b)=>{if(Math.abs(a-b)>180){if(a<b)a+=360;else b+=360}return((a+b)/2)%360};
+  const sm=x=>x<=0?0:x>=1?1:x*x*(3-2*x),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  /* a few butterflies, different sizes (big = near & bright, small = far & faint), theme colours */
+  const SPEC=[
+    {s:1.6, a:.95,h:[330,272]},   /* hot pink -> violet */
+    {s:1.2, a:.85,h:[300,232]},   /* magenta  -> blue   */
+    {s:.9,  a:.75,h:[22,335]},    /* rose-gold-> pink   */
+    {s:.7,  a:.65,h:[255,330]},   /* indigo   -> pink   */
+    {s:.55, a:.55,h:[345,285]}    /* rose     -> violet */
   ];
-
-  for (let i = 0; i <= N; i++) {
-    rp.push(new Path2D());
-  }
-
-  for (let i = 0; i < N; i++) {
-    F.push([]);
-
-    for (let j = 0; j < M; j++) {
-      const j2 = (j + 1) % M;
-      const A3 = R3[i][j];
-
-      const n = cross(
-        sub(R3[i + 1][j], A3),
-        sub(R3[i][j2], A3)
-      );
-
-      const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-      const fr = facing(n);
-
-      F[i].push(fr);
-
-      const am = Math.cos((j + .5) / M * 6.2832);
-      const tm = (S[i].t + S[i + 1].t) / 2;
-
-      if (fr) {
-        seg(rp[i], V[i][j], V[i][j2]);
-
-        fills.push([
-          [V[i][j], V[i][j2], V[i + 1][j2], V[i + 1][j]],
-          skin(
-            am,
-            tm,
-            Math.max(0, (-.25 * n[0] + .75 * n[1] + .6 * n[2]) / nl),
-            Math.max(0, (n[1] * se + n[2] * ce) / nl)
-          )
-        ]);
-      }
-    }
-  }
-
-  for (let i = 1; i < N; i++) {
-    for (let j = 0; j < M; j++) {
-      if (F[i - 1][j] !== F[i][j]) {
-        seg(
-          sil[Math.cos(j / M * 6.2832) > .3 ? 1 : 0],
-          V[i][j],
-          V[i][(j + 1) % M]
-        );
-      }
-    }
-  }
-
-  for (let i = 0; i < N; i++) {
-    for (let j = 0; j < M; j++) {
-      const jp = (j + M - 1) % M;
-
-      if (F[i][jp] !== F[i][j]) {
-        seg(
-          sil[Math.cos(j / M * 6.2832) > .3 ? 1 : 0],
-          V[i][j],
-          V[i + 1][j]
-        );
-      }
-    }
-  }
-
-  const parts = [];
-
-  /* Main body */
-  parts.push({
-    z: 0,
-
-    fn() {
-      layer(allP, A * 1.15, c => {
-        c.lineWidth = 1;
-        c.lineJoin = "round";
-
-        for (const f of fills) {
-          poly(c, f[0], true);
-          c.fillStyle = c.strokeStyle = f[1];
-          c.fill();
-          c.stroke();
-        }
-      });
-
-      cx.globalCompositeOperation = "lighter";
-      cx.lineJoin = "round";
-
-      /* Ventral pleats */
-      const i0 = idx(.02);
-      const i1 = idx(.52);
-      const ic = idx(.28);
-
-      for (let k = 0; k < 11; k++) {
-        const th = (100 + k * 16) * Math.PI / 180;
-        const a = Math.cos(th);
-        const b = Math.sin(th);
-
-        const near = new Path2D();
-        const far = new Path2D();
-
-        let pen = false;
-
-        for (let i = i0; i <= i1; i++) {
-          const ok = facing(nrm(i, a, b));
-          const q = prj(surf(i, a, b));
-          const P = i <= ic ? near : far;
-
-          if (ok) {
-            if (pen) P.lineTo(q[0], q[1]);
-            else P.moveTo(q[0], q[1]);
-
-            pen = true;
-          } else {
-            pen = false;
-          }
-        }
-
-        cx.lineWidth = 1;
-        cx.strokeStyle = `hsla(335,85%,72%,${A * .75})`;
-        cx.stroke(near);
-
-        cx.strokeStyle = `hsla(335,85%,72%,${A * .35})`;
-        cx.stroke(far);
-      }
-
-      /* Contour rings and travelling scan band */
-      cx.lineWidth = .8;
-
-      const sc = ((T * .22 + w.p * .1) % 1.5) - .25;
-
-      for (let i = 2; i < N - 1; i++) {
-        const t = S[i].t;
-        const d = Math.abs(t - sc);
-
-        const al =
-          (i % 7 === 3 ? .1 : 0) +
-          (d < .09 ? Math.pow(1 - d / .09, 2) * .5 : 0);
-
-        if (al > 0) {
-          cx.strokeStyle = `hsla(${305 - t * 60},70%,68%,${A * al})`;
-          cx.stroke(rp[i]);
-        }
-      }
-
-      /* Circuit traces */
-      cx.lineWidth = .8;
-
-      for (const tc of TRC) {
-        let prev = null;
-
-        cx.strokeStyle = `hsla(${tc.c},70%,78%,${A * .38})`;
-        cx.beginPath();
-
-        for (const [t, a] of tc.pts) {
-          const i = idx(t);
-          const b = tc.side * Math.sqrt(1 - a * a);
-
-          if (!facing(nrm(i, a, b))) {
-            prev = null;
-            continue;
-          }
-
-          const q = prj(surf(i, a, b));
-
-          if (prev) cx.lineTo(q[0], q[1]);
-          else cx.moveTo(q[0], q[1]);
-
-          prev = q;
-        }
-
-        cx.stroke();
-      }
-
-      /* Glowing silhouette */
-      cx.lineWidth = 4;
-      cx.strokeStyle = `hsla(330,80%,60%,${A * .12})`;
-      cx.stroke(sil[0]);
-
-      cx.strokeStyle = `hsla(222,85%,68%,${A * .14})`;
-      cx.stroke(sil[1]);
-
-      cx.lineWidth = 1.2;
-      cx.strokeStyle = `hsla(330,80%,72%,${A * .9})`;
-      cx.stroke(sil[0]);
-
-      cx.strokeStyle = `hsla(222,85%,74%,${A * .95})`;
-      cx.stroke(sil[1]);
-
-      /* Face and mouth details */
-      const iEnd = idx(.24);
-      const ie = idx(.19);
-
-      for (const side of [-1, 1]) {
-        const ma = i => -.42 * (1 - Math.pow(S[i].t / .24, 1.4));
-        const mb = i => side * Math.sqrt(1 - ma(i) * ma(i));
-        const mi = Math.max(1, iEnd >> 1);
-
-        if (facing(nrm(mi, ma(mi), mb(mi)))) {
-          const pts = [];
-
-          for (let i = 1; i <= iEnd; i++) {
-            pts.push(prj(surf(i, ma(i), mb(i))));
-          }
-
-          cx.strokeStyle = `hsla(330,75%,76%,${A})`;
-          cx.lineWidth = 1.3;
-
-          poly(cx, pts, false);
-          cx.stroke();
-        }
-
-        const ea = .25;
-        const eb = side * Math.sqrt(1 - ea * ea);
-
-        if (facing(nrm(ie, ea, eb))) {
-          const e = prj(surf(ie, ea, eb));
-          const r = Math.max(1.5, L * .004);
-
-          cx.strokeStyle = `hsla(330,70%,72%,${A * .65})`;
-          cx.lineWidth = .8;
-
-          cx.beginPath();
-          cx.arc(e[0], e[1], r * 2.1, 0, 7);
-          cx.stroke();
-
-          cx.fillStyle = `hsla(42,90%,80%,${Math.min(1, A + .25)})`;
-
-          cx.beginPath();
-          cx.arc(e[0], e[1], r, 0, 7);
-          cx.fill();
-        }
-      }
-
-      /* Small glowing sensory details */
-      for (let k = 0; k < 8; k++) {
-        const i = idx(.02 + .02 * k);
-        const a = .97;
-        const b = k % 2 ? .22 : -.22;
-
-        if (facing(nrm(i, a, b))) {
-          const p = prj(surf(i, a, b));
-
-          cx.fillStyle = `hsla(335,80%,78%,${A * .55})`;
-          cx.beginPath();
-          cx.arc(p[0], p[1], 1.2, 0, 7);
-          cx.fill();
-        }
-      }
-
-      for (const q of SP) {
-        const i = idx(q.t);
-        const a = q.k;
-        const b = (q.o > 3 ? 1 : -1) * Math.sqrt(1 - a * a);
-
-        if (!facing(nrm(i, a, b))) continue;
-
-        const p = prj(surf(i, a, b));
-        const tw = .5 + .5 * Math.sin(T * 2 + q.o);
-
-        cx.fillStyle =
-          `hsla(${q.o > 4.5 ? 42 : q.o > 3 ? 335 : 215},80%,75%,${A * (.25 + .6 * tw)})`;
-
-        cx.beginPath();
-        cx.arc(p[0], p[1], 1.3, 0, 7);
-        cx.fill();
-      }
-    }
-  });
-
-  /* Pectoral flippers */
-  const flip = (side, k, p2) => {
-    const p = S[k];
-    const Tf = ph * .5 + p2;
-    const len = L * .3;
-    const sw = .3 * Math.sin(Tf + .8);
-
-    const base = lin(
-      p.c, 1,
-      p.u, -p.hb * .3,
-      p.sd, side * p.lw * .72
-    );
-
-    const af = .3 + .22 * Math.sin(Tf);
-    const au = -.85 * Math.cos(sw);
-    const as = side * (.3 + .3 * Math.sin(sw)) - .25 * steer;
-
-    const Dv = nz(lin(p.f, af, p.u, au, p.sd, as));
-    const lf = [-p.f[0], -p.f[1], -p.f[2]];
-
-    const q = nz(lin(lf, 1, Dv, -dot(lf, Dv)));
-    const Dq = cross(Dv, q);
-
-    const K = 14;
-    const ld = [], tr_ = [], md = [];
-
-    let zs = 0;
-
-    for (let s = 0; s <= K; s++) {
-      const u = s / K;
-
-      const wd = L * .05 * (
-        .5 * (1 - u) +
-        .62 * Math.pow(Math.sin(Math.PI * Math.min(1, u * 1.04)), .9) +
-        .02
-      );
-
-      const lag = Math.sin(Tf - u * 1.4) * len * .05 * u * u;
-
-      const tau =
-        (.55 * Math.sin(Tf + 1.1) - .35 * steer * side) *
-        Math.pow(u, 1.5);
-
-      const qq = lin(q, Math.cos(tau), Dq, Math.sin(tau));
-
-      const cen = lin(
-        base, 1,
-        Dv, len * u,
-        p.u, lag * .8,
-        p.sd, side * lag
-      );
-
-      const r = rotv(cen);
-
-      zs += r[2];
-
-      ld.push(prj(rotv(lin(cen, 1, qq, wd * (1 + .07 * Math.sin(u * 26))))));
-      tr_.push(prj(rotv(lin(cen, 1, qq, -wd * .6))));
-      md.push(prj(r));
-    }
-
-    parts.push({
-      z: zs / (K + 1),
-
-      fn() {
-        poly(cx, ld.concat(tr_.slice().reverse()), true);
-
-        cx.globalCompositeOperation = "source-over";
-
-        cx.fillStyle = jointGrad(
-          md[0], md[K], A * 1.1, .28,
-          "hsla(318,55%,26%,#)",
-          "hsla(240,55%,30%,#)"
-        );
-
-        cx.fill();
-
-        cx.globalCompositeOperation = "lighter";
-        cx.lineWidth = 1.1;
-
-        cx.strokeStyle = jointGrad(
-          md[0], md[K], A, .35,
-          "hsla(330,65%,62%,#)",
-          "hsla(225,80%,68%,#)"
-        );
-
-        poly(cx, ld, false);
-        cx.stroke();
-
-        poly(cx, tr_, false);
-        cx.stroke();
-
-        cx.lineWidth = .7;
-
-        cx.strokeStyle = jointGrad(
-          md[0], md[K], A * .45, .4,
-          "hsla(335,70%,66%,#)",
-          "hsla(225,80%,68%,#)"
-        );
-
-        poly(cx, md, false);
-        cx.stroke();
-      }
-    });
-  };
-
-  flip(-1, idx(.28), 1.2);
-  flip(1, idx(.28), 0);
-
-  /* Dorsal fin */
-  {
-    const top = f => {
-      const p = S[idx(f)];
-      return [lin(p.c, 1, p.u, p.ht), p];
-    };
-
-    const [a, pa] = top(.6);
-    const [m, pm] = top(.67);
-    const [b, pb] = top(.75);
-    const [c1, p1] = top(.63);
-    const [c2, p2_] = top(.71);
-
-    const sk = L * .016;
-
-    const a0 = lin(a, 1, pa.u, -sk);
-    const b0 = lin(b, 1, pb.u, -sk);
-
-    const pk = lin(m, 1, pm.u, L * .03, pm.f, L * .012);
-    const q1 = lin(c1, 1, p1.u, L * .02);
-    const q2 = lin(c2, 1, p2_.u, L * .008);
-
-    const bz = (P0, P1, P2, u) =>
-      lin(P0, (1 - u) * (1 - u), P1, 2 * u * (1 - u), P2, u * u);
-
-    const loc = [];
-
-    for (let u = 0; u <= 1.001; u += .125) {
-      loc.push(bz(a0, q1, pk, u));
-    }
-
-    for (let u = .125; u <= 1.001; u += .125) {
-      loc.push(bz(pk, q2, b0, u));
-    }
-
-    const tk = L * .004;
-    const pl = z => loc.map(P => prj(rotv(lin(P, 1, pm.sd, z))));
-
-    const f0 = pl(0);
-    const fa = pl(tk);
-    const fb = pl(-tk);
-
-    const bm = prj(rotv(lin(a0, .5, b0, .5)));
-    const pt = prj(rotv(pk));
-
-    parts.push({
-      z: rotv(pk)[2],
-
-      fn() {
-        poly(cx, f0, true);
-
-        cx.globalCompositeOperation = "source-over";
-
-        cx.fillStyle = jointGrad(
-          bm, pt, A * 1.1, .3,
-          "hsla(310,55%,22%,#)",
-          "hsla(238,55%,30%,#)"
-        );
-
-        cx.fill();
-
-        cx.globalCompositeOperation = "lighter";
-        cx.lineWidth = 1;
-
-        cx.strokeStyle = jointGrad(
-          bm, pt, A, .35,
-          "hsla(330,65%,60%,#)",
-          "hsla(225,80%,68%,#)"
-        );
-
-        poly(cx, fa, false);
-        cx.stroke();
-
-        cx.strokeStyle = jointGrad(
-          bm, pt, A * .6, .35,
-          "hsla(330,65%,60%,#)",
-          "hsla(225,80%,68%,#)"
-        );
-
-        poly(cx, fb, false);
-        cx.stroke();
-      }
-    });
-  }
-
-  /* Tail fluke */
-  {
-    const e = S[N];
-    const tpp = ph - 3.5;
-    const eps = .45 * Math.sin(tpp);
-
-    const Tn = lin(e.f, Math.cos(eps), e.u, Math.sin(eps));
-    const Un = lin(e.f, -Math.sin(eps), e.u, Math.cos(eps));
-
-    const C = L * .17;
-    const Kc = 18;
-    const Ku = 4;
-
-    const U3 = [], L3 = [], us = [], ls = [], fp = [];
-
-    const P = (k, r, top) => {
-      const c = -C + 2 * C * k / Kc;
-      const q = Math.abs(c) / C;
-
-      const lead = L * (-.06 + .17 * Math.pow(q, 1.7));
-      const trail = L * (.045 + .065 * q + .004 * q * Math.sin(q * 18));
-
-      const u = r / Ku;
-      const a = lead + u * (trail - lead);
-
-      const th =
-        L * .018 *
-        Math.pow(1 - q, .8) *
-        Math.pow(Math.sin(Math.PI * u), .6);
-
-      const v =
-        L * .025 * q * q +
-        L * .03 * Math.sin(tpp - 1.2) * Math.pow(q, 1.5) +
-        (top ? th : -th);
-
-      return rotv(lin(e.c, 1, Tn, a, Un, v, e.sd, c));
-    };
-
-    for (let k = 0; k <= Kc; k++) {
-      U3.push([]);
-      L3.push([]);
-      us.push([]);
-      ls.push([]);
-
-      for (let r = 0; r <= Ku; r++) {
-        const a = P(k, r, 1);
-        const b = P(k, r, 0);
-
-        const pa = prj(a);
-        const pb = prj(b);
-
-        U3[k].push(a);
-        L3[k].push(b);
-
-        us[k].push(pa);
-        ls[k].push(pb);
-
-        fp.push(pa, pb);
-      }
-    }
-
-    const ff = [];
-    const bw = new Path2D();
-
-    for (let k = 0; k < Kc; k++) {
-      for (let r = 0; r < Ku; r++) {
-        for (const top of [1, 0]) {
-          const G = top ? U3 : L3;
-          const Sx = top ? us : ls;
-
-          const A3 = G[k][r];
-          const eu = sub(G[k][r + 1], A3);
-          const ec = sub(G[k + 1][r], A3);
-
-          const n = top ? cross(eu, ec) : cross(ec, eu);
-          const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-
-          if (!facing(n)) continue;
-
-          ff.push([
-            [
-              Sx[k][r],
-              Sx[k + 1][r],
-              Sx[k + 1][r + 1],
-              Sx[k][r + 1]
-            ],
-            skin(
-              top ? 1 : -1,
-              .9,
-              Math.max(0, (-.25 * n[0] + .75 * n[1] + .6 * n[2]) / nl),
-              Math.max(0, (n[1] * se + n[2] * ce) / nl)
-            )
-          ]);
-
-          if (r === 0) seg(bw, Sx[k][0], Sx[k + 1][0]);
-          if (r === Ku - 1) seg(bw, Sx[k][Ku], Sx[k + 1][Ku]);
-        }
-      }
-    }
-
-    parts.push({
-      z: rotv(e.c)[2],
-
-      fn() {
-        layer(fp, A * 1.15, c => {
-          c.lineWidth = 1;
-
-          for (const f of ff) {
-            poly(c, f[0], true);
-            c.fillStyle = c.strokeStyle = f[1];
-            c.fill();
-            c.stroke();
-          }
-        });
-
-        cx.globalCompositeOperation = "lighter";
-
-        cx.lineWidth = 3.5;
-        cx.strokeStyle = `hsla(300,70%,62%,${A * .12})`;
-        cx.stroke(bw);
-
-        cx.lineWidth = 1.1;
-        cx.strokeStyle = `hsla(300,70%,70%,${A})`;
-        cx.stroke(bw);
-      }
-    });
-  }
-
-  /* Draw parts in depth order */
-  parts.sort((a, b) => a.z - b.z);
-
-  cx.save();
-  parts.forEach(p => p.fn());
-  cx.restore();
-}
-
-/* Update all whales each animation frame */
-function whales(ts) {
-  const dt = lt ? Math.min(ts - lt, 80) : 0;
-  lt = ts;
-
-  WH.forEach(w => whale(w, ts, dt));
-}
-
-/* ===== MAIN CANVAS ANIMATION ===== */
-
-function draw(ts) {
-  cx.clearRect(0, 0, W, H);
-
-  // Stars and floating hearts
-  for (const p of P) {
-    const a = .5 + .5 * Math.sin(ts / 900 + p.t);
-
-    if (p.k === 0) {
-      cx.fillStyle = `rgba(255,240,210,${.2 + a * .7})`;
-      cx.beginPath();
-      cx.arc(p.x * W, p.y * H, p.r, 0, Math.PI * 2);
-      cx.fill();
-    } else {
-      if (!rm) p.y -= p.v;
-      if (p.y < -.05) p.y = 1.05;
-
-      cx.fillStyle = `rgba(242,167,184,${.08 + a * .14})`;
-      heartPath(
-        p.x * W + Math.sin(ts / 2000 + p.t) * 14,
-        p.y * H,
-        p.r
-      );
-    }
-  }
-
-  // Holographic whales
-  whales(ts);
-
-  // Continue animation
-  if (!rm) requestAnimationFrame(draw);
-}
-
-requestAnimationFrame(draw);
+  const BF=SPEC.map(o=>({...o,x:80+Math.random()*(BW-160),y:80+Math.random()*(BH-160),psi:Math.random()*6.28,ph:Math.random()*6,
+    rho:0,turn:0,o1:Math.random()*6.28,o2:Math.random()*6.28,o3:Math.random()*6.28,trail:[],acc:0,
+    spk:Array.from({length:9},()=>[.2+Math.random()*.65,Math.random(),Math.random()*6])}));
+
+  function node(x,y,r,h,a){const q=g.createRadialGradient(x,y,0,x,y,r);
+    q.addColorStop(0,`hsla(${h},100%,90%,${Math.min(1,a+.3)})`);q.addColorStop(.35,`hsla(${h},100%,68%,${a*.55})`);q.addColorStop(1,`hsla(${h},100%,60%,0)`);
+    g.fillStyle=q;g.beginPath();g.arc(x,y,r,0,7);g.fill()}
+
+  function render(b,T,dt,still){
+    const sc=clamp(BW/900,.7,1.15),U=34*b.s*sc,m=Math.max(60,U*2.4);
+    if(!still){
+      /* --- flight path: wandering turns, soft steering back inside the screen (never leaves) --- */
+      let turn=1.05*Math.sin(T*.7+b.o1)+.7*Math.sin(T*1.7+b.o2)+.4*Math.sin(T*2.9+b.o3);
+      const ex=Math.max(0,m-b.x)+Math.max(0,b.x-(BW-m)),ey=Math.max(0,m-b.y)+Math.max(0,b.y-(BH-m)),e=Math.min(1,Math.hypot(ex,ey)/m);
+      if(e>0){const want=Math.atan2(BH/2-b.y,BW/2-b.x),df=Math.atan2(Math.sin(want-b.psi),Math.cos(want-b.psi));turn=turn*(1-e)+clamp(df*3,-3.5,3.5)*e}
+      b.turn+=(turn-b.turn)*Math.min(1,dt*4);b.psi+=b.turn*dt;
+      const gl=sm(.5+1.4*Math.sin(T*.21+b.o3)-.45);b.gl=gl;                 /* gliding amount */
+      b.ph+=dt*6.283*(2.6+1.2*Math.sin(T*.45+b.o1))*(1-.55*gl);               /* wing-beat phase */
+      const v=(40+30*(.5+.5*Math.sin(T*.37+b.o2)))*Math.pow(b.s,.55)*(1+.35*Math.max(0,Math.sin(b.ph+.8)))*(1-.35*gl);
+      b.x=clamp(b.x+Math.cos(b.psi)*v*dt,U,BW-U);b.y=clamp(b.y+Math.sin(b.psi)*v*dt,U,BH-U);
+      b.rho+=(clamp(b.turn*.28,-.55,.55)-b.rho)*Math.min(1,dt*3);             /* banks into turns */
+    }else{b.gl=0}
+    const gl=b.gl,ph=b.ph,cps=Math.cos(b.psi),sps=Math.sin(b.psi),cr=Math.cos(b.rho),sr=Math.sin(b.rho);
+    const bob=-Math.sin(ph+.5)*U*.16*(1-gl);
+    /* local (X forward, Y toward viewer, Z right) -> screen: roll, heading, slight parallax so raised wings read as 3D */
+    const P=(X,Y,Z)=>{const y1=Y*cr-Z*sr,z1=Y*sr+Z*cr,f=1+.1*y1/U;return[b.x+(X*cps-z1*sps)*f,b.y+bob+(X*sps+z1*cps)*f-y1*.32,y1]};
+    const B0=.55-.35*gl,AB=.95*(1-.55*gl),h1=b.h[0],h2=b.h[1],A=b.a;
+    /* ---- wings ---- */
+    function mk(side,out,hx,lag,amp,sa,sc2,vein,ti,fore){
+      const q=ph-lag,beta=B0+AB*amp*(Math.sin(q)+.25*Math.sin(2*q)),pts=[];let sy=0;
+      for(const [a,c] of out){const be=beta-.3*Math.cos(q)*a*a*amp,span=a*U*sa;     /* tips trail the stroke */
+        const p=P(hx*U+c*U*sc2,Math.sin(be)*span,side*(.05*U+Math.cos(be)*span));pts.push(p);sy+=p[2]}
+      const hinge=P(hx*U,0,side*.05*U),n=[Math.sin(beta)],ny=-side*Math.cos(beta)*cr-Math.sin(beta)*sr*side*0+Math.sin(beta)*sr;
+      return{pts,my:sy/pts.length,hinge,k:Math.min(1,Math.abs(ny)),vein,tip:pts[ti],fore,side,beta}}
+    const ws=[mk(-1,HW,-.02,.3,.9,.95,.95,HV,HT,0),mk(1,HW,-.02,.3,.9,.95,.95,HV,HT,0),mk(-1,FW,.12,0,1,1.1,1.1,FV,FT,1),mk(1,FW,.12,0,1,1.1,1.1,FV,FT,1)];
+    function wing(w){const al=A*(.3+.7*w.k),pts=w.pts,hg=w.hinge,tp=w.tip;
+      g.globalCompositeOperation='source-over';g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();
+      g.fillStyle=`hsla(285,60%,14%,${al*.4})`;g.fill();                                  /* glass base */
+      g.globalCompositeOperation='lighter';
+      const gr=g.createLinearGradient(hg[0],hg[1],tp[0],tp[1]);
+      gr.addColorStop(0,`hsla(${h1},100%,52%,${al*.55})`);gr.addColorStop(.55,`hsla(${mh(h1,h2)},95%,50%,${al*.4})`);gr.addColorStop(1,`hsla(${h2},95%,54%,${al*.55})`);
+      g.fillStyle=gr;g.fill();
+      g.lineWidth=.7;g.strokeStyle=`hsla(${h1},100%,80%,${al*.5})`;                        /* veins */
+      for(const j of w.vein){g.beginPath();g.moveTo(hg[0],hg[1]);g.lineTo(pts[j][0],pts[j][1]);g.stroke()}
+      g.lineJoin='round';g.lineWidth=3.2;g.strokeStyle=`hsla(${h2},100%,62%,${al*.14})`;g.stroke();   /* glowing edge */
+      g.lineWidth=1.1;g.strokeStyle=`hsla(${mh(h1,h2)},100%,80%,${al*.95})`;g.stroke();
+      for(const s of b.spk){const a=s[0],c=w.fore?-.1+s[1]*.5:-.2-s[1]*.55,p=P(((w.fore?.12:-.02)+c*(w.fore?1.1:.95))*U,
+        Math.sin(w.beta)*a*U*(w.fore?1.1:.95),w.side*(.05*U+Math.cos(w.beta)*a*U*(w.fore?1.1:.95))),tw=.5+.5*Math.sin(T*2.2+s[2]);
+        g.fillStyle=`hsla(${s[2]>3?h1:42},100%,82%,${al*(.2+.55*tw)})`;g.beginPath();g.arc(p[0],p[1],.9+b.s*.5,0,7);g.fill()}
+      if(!w.fore){const p=P(-.02*U-.5*U*.95,Math.sin(w.beta)*.6*U*.95,w.side*(.05*U+Math.cos(w.beta)*.6*U*.95));   /* eye-spot */
+        g.strokeStyle=`hsla(42,100%,82%,${al*.7})`;g.lineWidth=.9;g.beginPath();g.ellipse(p[0],p[1],U*.09,U*.09*Math.max(.25,w.k),b.psi,0,7);g.stroke();node(p[0],p[1],U*.14,45,al*.5)}
+      node(tp[0],tp[1],3+U*.12,h2,al*.8)}                                                   /* glowing wing tip */
+    function body(){const al=A,p0=P(.34*U,0,0),pt=P(.14*U,0,0),pa=P(-.9*U,0,0);
+      g.globalCompositeOperation='lighter';const hz=g.createRadialGradient(pt[0],pt[1],0,pt[0],pt[1],U*1.5);
+      hz.addColorStop(0,`hsla(${h1},100%,70%,${al*.1})`);hz.addColorStop(1,`hsla(${h1},100%,60%,0)`);g.fillStyle=hz;g.beginPath();g.arc(pt[0],pt[1],U*1.5,0,7);g.fill();
+      g.globalCompositeOperation='source-over';
+      for(let i=9;i>=0;i--){const X=-.02*U-i*.1*U,p=P(X,0,0),r=U*(.1-.0065*i);g.fillStyle=`hsla(${i%2?h2:h1},80%,${24+i}%,${al})`;g.beginPath();g.arc(p[0],p[1],r,0,7);g.fill()}
+      g.fillStyle=`hsla(${h1},85%,30%,${al})`;g.beginPath();g.arc(pt[0],pt[1],U*.12,0,7);g.fill();
+      g.beginPath();g.arc(p0[0],p0[1],U*.08,0,7);g.fill();
+      g.globalCompositeOperation='lighter';g.strokeStyle=`hsla(${h1},100%,78%,${al*.7})`;g.lineWidth=1;
+      g.beginPath();g.moveTo(pa[0],pa[1]);g.lineTo(pt[0],pt[1]);g.lineTo(p0[0],p0[1]);g.stroke();
+      for(const s of[-1,1]){const sw=Math.sin(T*3+s)*.04*U,a=P(.36*U,.02*U,s*.03*U),c=P(.62*U,.06*U+sw,s*.14*U),d=P(.95*U,.16*U+sw,s*.42*U);   /* antennae */
+        g.strokeStyle=`hsla(${h2},100%,80%,${al*.85})`;g.lineWidth=.9;g.beginPath();g.moveTo(a[0],a[1]);g.quadraticCurveTo(c[0],c[1],d[0],d[1]);g.stroke();node(d[0],d[1],2.5+U*.05,h1,al*.9)}
+      node(p0[0],p0[1],U*.08,45,al*.7)}
+    /* far-side wings first, then body, then near-side wings (hind before fore) */
+    const back=ws.filter(w=>w.my<0).sort((a,c)=>a.fore-c.fore),front=ws.filter(w=>w.my>=0).sort((a,c)=>a.fore-c.fore);
+    back.forEach(wing);body();front.forEach(wing);
+    /* fairy-dust trail */
+    if(!still){b.acc+=dt;if(b.acc>.05&&b.trail.length<40){b.acc=0;const p=P(-.9*U,0,0);b.trail.push({x:p[0]+(Math.random()-.5)*6,y:p[1]+(Math.random()-.5)*6,l:1,r:.8+Math.random()*1.4,c:Math.random()>.5?h1:h2})}
+      for(let i=b.trail.length-1;i>=0;i--){const d=b.trail[i];d.l-=dt*.8;d.y+=dt*10;if(d.l<=0){b.trail.splice(i,1);continue}
+        g.globalCompositeOperation='lighter';g.fillStyle=`hsla(${d.c},100%,75%,${A*d.l*.7})`;g.beginPath();g.arc(d.x,d.y,d.r*d.l+.3,0,7);g.fill()}}
+    g.globalCompositeOperation='source-over'}
+
+  let last=0;
+  function loop(ts){const dt=Math.min(.05,last?(ts-last)/1000:.016);last=ts;g.clearRect(0,0,BW,BH);
+    /* draw far (small) ones first so big butterflies pass in front */
+    [...BF].sort((a,b)=>a.s-b.s).forEach(b=>render(b,ts/1000,dt,false));requestAnimationFrame(loop)}
+  if(reduce){g.clearRect(0,0,BW,BH);BF.forEach(b=>{b.ph=.8;render(b,0,0,true)})}else requestAnimationFrame(loop);
+})();
+  
 </script>
 </body>
 </html>
